@@ -1,11 +1,8 @@
-name: Run tech.py script
+name: Run tech.py every hour
 
 on:
-  push:
-    branches:
-      - main   # شغل عند كل دفع على الفرع main
   schedule:
-    - cron: '0 8 * * *'  # شغل يوميًا الساعة 8 صباحًا بتوقيت UTC (يمكنك تعديل الوقت)
+    - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
 
 jobs:
   run-tech:
@@ -18,7 +15,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  # اختر نسخة البايثون المناسبة
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -27,5 +24,5 @@ jobs:
 
       - name: Run tech.py
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # استخدم secret من إعدادات المستودع
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python tech.py
