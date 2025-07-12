@@ -22,10 +22,11 @@ def write_last_sent_id(post_id):
     with open(LAST_ID_FILE, "w") as f:
         f.write(post_id)
 
-def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
+def call_gemini_api(prompt, max_retries=5, wait_seconds=5, max_output_tokens=250):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
+        "contents": [{"parts": [{"text": prompt}]}],
+        "maxOutputTokens": max_output_tokens
     }
     headers = {'Content-Type': 'application/json'}
 
@@ -51,7 +52,6 @@ def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
 def summarize_title(text):
     prompt = (
         "لخص النص كعنوان قصير باللغة العربية، يجب أن يبدأ العنوان بكلمة عربية، "
-        "مع إبقاء أسماء الخدمات والبرامج والتطبيقات بالإنجليزية كما هي، "
         "وبقية العنوان يكون بالعربية:\n"
         f"{text}"
     )
@@ -59,11 +59,10 @@ def summarize_title(text):
 
 def summarize_description(text):
     prompt = (
-        "لخص النص في فقرتين باللغة العربية، مع إبقاء أسماء الخدمات والبرامج والتطبيقات بالإنجليزية كما هي، "
-        "وتأكد أن النص عربي واضح وسلس:\n"
+        "لخص النص في فقرة واحدة باللغة العربية، ويجب ألا يتجاوز النص 240 حرفًا بما في ذلك المسافات وعلامات الترقيم:\n"
         f"{text}"
     )
-    return call_gemini_api(prompt)
+    return call_gemini_api(prompt, max_output_tokens=250)
 
 def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
     rss = ET.Element("rss", version="2.0")
