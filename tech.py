@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 LAST_ID_FILE = "last_sent_id.txt"
-RSS_OUTPUT_PATH = "bots/rss.xml"  # مسار حفظ ملف RSS
+RSS_OUTPUT_PATH = "rss.xml"  # مسار حفظ ملف RSS
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
