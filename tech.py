@@ -4,15 +4,13 @@ import requests
 import os
 import time
 
-# مسار ملف last_sent_id.txt داخل مجلد bots
-current_dir = os.path.dirname(os.path.abspath(__file__))  # هذا هو مجلد bots
-LAST_ID_FILE = os.path.join(current_dir, "last_sent_id.txt")
+# حفظ ملف last_sent_id.txt في نفس مجلد tech.py
+LAST_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_sent_id.txt")
 
-# إعدادات الخلاصة و Gemini API و Mastodon
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
-MASTODON_API_BASE_URL = "https://mastodon.social"  # ثابت لأنك تستخدم mastodon.social
+MASTODON_API_BASE_URL = "https://mastodon.social"
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
@@ -41,9 +39,7 @@ def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
     payload = {
         "contents": [
             {
-                "parts": [
-                    {"text": prompt}
-                ]
+                "parts": [{"text": prompt}]
             }
         ],
         "generationConfig": {
@@ -68,9 +64,8 @@ def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
                 print(f"محاولة {attempt+1} فشلت بسبب ازدحام الخدمة. إعادة المحاولة بعد {wait_seconds} ثانية...")
                 time.sleep(wait_seconds)
             else:
-                print(f"حدث خطأ آخر في الاتصال بـ Gemini: {response.status_code} - {response.text}")
+                print(f"خطأ في الاتصال بـ Gemini: {response.status_code} - {response.text}")
                 return None
-
     print("فشلت كل المحاولات مع Gemini.")
     return None
 
@@ -82,12 +77,8 @@ def upload_media_to_mastodon(image_url):
         print(f"فشل تحميل الصورة من {image_url}: {e}")
         return None
 
-    files = {
-        'file': ('image.jpg', img_response.content)
-    }
-    headers = {
-        "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
-    }
+    files = {'file': ('image.jpg', img_response.content)}
+    headers = {"Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"}
     upload_url = f"{MASTODON_API_BASE_URL}/api/v2/media"
 
     response = requests.post(upload_url, headers=headers, files=files)
@@ -104,14 +95,10 @@ def upload_media_to_mastodon(image_url):
         return None
 
 def post_to_mastodon(text, image_url=None):
-    headers = {
-        "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
-    }
-    data = {
-        "status": text
-    }
-
+    headers = {"Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"}
+    data = {"status": text}
     media_ids = []
+
     if image_url:
         media_id = upload_media_to_mastodon(image_url)
         if media_id:
@@ -139,11 +126,8 @@ async def main():
         return
 
     last_sent_id = read_last_sent_id()
-
-    # ترتيب المنشورات من الأقدم للأحدث
     entries = sorted(entries, key=lambda e: e.get('published_parsed', 0))
 
-    # تحديد المنشورات الجديدة
     if not last_sent_id:
         entries_to_send = [entries[-1]]
     else:
@@ -157,7 +141,6 @@ async def main():
                 entries_to_send.append(entry)
             elif post_id == last_sent_id:
                 found_last = True
-
         if not found_last:
             entries_to_send = entries
 
@@ -169,7 +152,6 @@ async def main():
         post_id = entry.get('id') or entry.get('link')
         description = entry.get('summary', '')
 
-        # محاولة استخراج رابط الصورة من media_content أو enclosures
         image_url = None
         if 'media_content' in entry and len(entry.media_content) > 0:
             image_url = entry.media_content[0].get('url')
