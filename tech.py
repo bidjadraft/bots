@@ -115,3 +115,95 @@ def post_to_mastodon(status_text, image_url=None):
 
     data = {
         "status": status_text,
+        "visibility": "public",
+    }
+    if media_ids:
+        data["media_ids[]"] = media_ids
+
+    response = requests.post(url, headers=headers, data=data)
+    if response.status_code in (200, 202):
+        print("تم النشر على Mastodon بنجاح!")
+        return True
+    else:
+        print(f"فشل النشر على Mastodon: {response.status_code} - {response.text}")
+        return False
+
+def main():
+    if not GEMINI_API_KEY:
+        print("خطأ: مفتاح Gemini API غير موجود في متغيرات البيئة.")
+        return
+    if not MASTODON_ACCESS_TOKEN:
+        print("خطأ: توكن Mastodon غير موجود في متغيرات البيئة.")
+        return
+
+    feed = feedparser.parse(RSS_URL)
+    entries = feed.entries
+    if not entries:
+        print("لا توجد منشورات في الخلاصة.")
+        return
+
+    last_sent_id = read_last_sent_id()
+
+    entries = sorted(entries, key=lambda e: e.get('published_parsed', 0))
+
+    if not last_sent_id:
+        entries_to_send = [entries[-1]]
+    else:
+        entries_to_send = []
+        found_last = False
+        for entry in entries:
+            post_id = entry.get('id') or entry.get('link')
+            if not post_id:
+                continue
+            if found_last:
+                entries_to_send.append(entry)
+            elif post_id == last_sent_id:
+                found_last = True
+        if not found_last:
+            entries_to_send = entries
+
+    if not entries_to_send:
+        print("لا توجد منشورات جديدة للإرسال.")
+        return
+
+    items = []
+
+    for entry in entries_to_send:
+        post_id = entry.get('id') or entry.get('link')
+        description = entry.get('summary', '')
+
+        photo_url = None
+        if 'media_content' in entry and len(entry.media_content) > 0:
+            photo_url = entry.media_content[0]['url']
+        elif 'enclosures' in entry and len(entry.enclosures) > 0:
+            photo_url = entry.enclosures[0]['url']
+
+        title = summarize_title(description)
+        if title is None:
+            print("فشل تلخيص العنوان، تخطي المنشور.")
+            continue
+
+        description_summary = summarize_description(description)
+        if description_summary is None:
+            print("فشل تلخيص الوصف، تخطي المنشور.")
+            continue
+
+        success = post_to_mastodon(description_summary, photo_url)
+        if not success:
+            print("فشل النشر على Mastodon، تخطي المنشور.")
+            continue
+
+        items.append({
+            "title": title,
+            "description": description_summary,
+            "link": entry.get('link', ''),
+            "guid": post_id,
+            "image": photo_url or ""
+        })
+
+        write_last_sent_id(post_id)
+
+    create_rss_xml(items)
+
+if __name__ == "__main__":
+    main()
