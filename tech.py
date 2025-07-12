@@ -10,7 +10,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MASTODON_INSTANCE = "mastodon.social"  # غيّر إلى مثيل Mastodon الخاص بك
 MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
 LAST_ID_FILE = "last_sent_id.txt"
-RSS_OUTPUT_PATH = "rss.xml"  # حفظ الملف في جذر المستودع
+RSS_OUTPUT_PATH = "rss.xml"
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
@@ -22,33 +22,28 @@ def write_last_sent_id(post_id):
     with open(LAST_ID_FILE, "w") as f:
         f.write(post_id)
 
-def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
+def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ]
+        "contents": [{"parts": [{"text": prompt}]}]
     }
     headers = {'Content-Type': 'application/json'}
 
     for attempt in range(max_retries):
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
-            data = response.json()
             try:
+                data = response.json()
                 return data['candidates'][0]['content']['parts'][0]['text']
-            except Exception:
+            except Exception as e:
+                print(f"خطأ في تحليل استجابة Gemini: {e}")
                 return None
         else:
             if response.status_code == 503 or "overloaded" in response.text:
                 print(f"محاولة {attempt+1} فشلت بسبب ازدحام الخدمة. إعادة المحاولة بعد {wait_seconds} ثانية...")
                 time.sleep(wait_seconds)
             else:
-                print(f"حدث خطأ آخر في الاتصال بـ Gemini: {response.text}")
+                print(f"خطأ في الاتصال بـ Gemini: {response.status_code} - {response.text}")
                 return None
     print("فشلت كل المحاولات مع Gemini.")
     return None
@@ -84,15 +79,13 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
         ET.SubElement(item_elem, "description").text = item["description"]
         ET.SubElement(item_elem, "link").text = item.get("link", "")
         ET.SubElement(item_elem, "guid").text = item.get("guid", item.get("link", ""))
-        if "image" in item:
+        if item.get("image"):
             ET.SubElement(item_elem, "enclosure", url=item["image"], type="image/jpeg")
 
     tree = ET.ElementTree(rss)
-
     dir_name = os.path.dirname(output_path)
     if dir_name:
         os.makedirs(dir_name, exist_ok=True)
-
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
     print(f"تم حفظ ملف RSS في {output_path}")
 
@@ -102,15 +95,14 @@ def post_to_mastodon(status_text, image_url=None):
         "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
     }
 
-    # إذا هناك صورة، نرفعها أولاً للحصول على media_id
     media_ids = []
     if image_url:
         try:
             img_resp = requests.get(image_url)
             if img_resp.status_code == 200:
                 files = {'file': ('image.jpg', img_resp.content)}
-                media_resp = requests.post(f"https://{MASTODON_INSTANCE}/api/v2/media", headers=headers, files=files)
-                if media_resp.status_code == 202 or media_resp.status_code == 200:
+                media_resp = requests.post(f"https://{MASTODON_INSTANCE}/api/v1/media", headers=headers, files=files)
+                if media_resp.status_code in (200, 202):
                     media_id = media_resp.json().get("id")
                     if media_id:
                         media_ids.append(media_id)
@@ -123,88 +115,3 @@ def post_to_mastodon(status_text, image_url=None):
 
     data = {
         "status": status_text,
-        "visibility": "public",
-    }
-    if media_ids:
-        data["media_ids[]"] = media_ids
-
-    response = requests.post(url, headers=headers, data=data)
-    if response.status_code in (200, 202):
-        print("تم النشر على Mastodon بنجاح!")
-        return True
-    else:
-        print(f"فشل النشر على Mastodon: {response.status_code} - {response.text}")
-        return False
-
-def main():
-    feed = feedparser.parse(RSS_URL)
-    entries = feed.entries
-    if not entries:
-        print("لا توجد منشورات في الخلاصة.")
-        return
-
-    last_sent_id = read_last_sent_id()
-
-    entries = sorted(entries, key=lambda e: e.get('published_parsed', 0))
-
-    if not last_sent_id:
-        entries_to_send = [entries[-1]]
-    else:
-        entries_to_send = []
-        found_last = False
-        for entry in entries:
-            post_id = entry.get('id') or entry.get('link')
-            if not post_id:
-                continue
-            if found_last:
-                entries_to_send.append(entry)
-            elif post_id == last_sent_id:
-                found_last = True
-        if not found_last:
-            entries_to_send = entries
-
-    if not entries_to_send:
-        print("لا توجد منشورات جديدة للإرسال.")
-        return
-
-    items = []
-
-    for entry in entries_to_send:
-        post_id = entry.get('id') or entry.get('link')
-        description = entry.get('summary', '')
-
-        photo_url = None
-        if 'media_content' in entry and len(entry.media_content) > 0:
-            photo_url = entry.media_content[0]['url']
-        elif 'enclosures' in entry and len(entry.enclosures) > 0:
-            photo_url = entry.enclosures[0]['url']
-        if not photo_url:
-            photo_url = None  # لا نرسل صورة افتراضية إلى Mastodon
-
-        title = summarize_title(description)
-        if title is None:
-            print("فشل تلخيص العنوان، تخطي المنشور.")
-            continue
-
-        description_summary = summarize_description(description)
-        if description_summary is None:
-            print("فشل تلخيص الوصف، تخطي المنشور.")
-            continue
-
-        # إرسال الوصف مع الصورة إلى Mastodon
-        post_to_mastodon(description_summary, photo_url)
-
-        items.append({
-            "title": title,
-            "description": description_summary,
-            "link": entry.get('link', ''),
-            "guid": post_id,
-            "image": photo_url if photo_url else ""
-        })
-
-        write_last_sent_id(post_id)
-
-    create_rss_xml(items)
-
-if __name__ == "__main__":
-    main()
