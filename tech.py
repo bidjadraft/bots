@@ -60,15 +60,56 @@ def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
     print("فشلت كل المحاولات مع Gemini.")
     return None
 
-def post_to_mastodon(text):
-    url = f"{MASTODON_API_BASE_URL}/api/v1/statuses"
+def upload_media_to_mastodon(image_url):
+    try:
+        img_response = requests.get(image_url)
+        img_response.raise_for_status()
+    except Exception as e:
+        print(f"فشل تحميل الصورة من {image_url}: {e}")
+        return None
+
+    files = {
+        'file': ('image.jpg', img_response.content)
+    }
+    headers = {
+        "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
+    }
+    upload_url = f"{MASTODON_API_BASE_URL}/api/v2/media"
+
+    response = requests.post(upload_url, headers=headers, files=files)
+    if response.status_code in (200, 202):
+        media_id = response.json().get('id')
+        if media_id:
+            print("تم رفع الصورة بنجاح.")
+            return media_id
+        else:
+            print("لم يتم الحصول على media_id بعد رفع الصورة.")
+            return None
+    else:
+        print(f"فشل رفع الصورة: {response.status_code} - {response.text}")
+        return None
+
+def post_to_mastodon(text, image_url=None):
     headers = {
         "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
     }
     data = {
         "status": text
     }
-    response = requests.post(url, headers=headers, data=data)
+
+    media_ids = []
+    if image_url:
+        media_id = upload_media_to_mastodon(image_url)
+        if media_id:
+            media_ids.append(media_id)
+        else:
+            print("سيتم إرسال المنشور بدون صورة بسبب فشل رفع الصورة.")
+
+    if media_ids:
+        data["media_ids[]"] = media_ids
+
+    post_url = f"{MASTODON_API_BASE_URL}/api/v1/statuses"
+    response = requests.post(post_url, headers=headers, data=data)
     if response.status_code == 200:
         print("تم النشر بنجاح على Mastodon.")
     else:
@@ -112,6 +153,13 @@ async def main():
         post_id = entry.get('id') or entry.get('link')
         description = entry.get('summary', '')
 
+        # محاولة استخراج رابط الصورة من media_content أو enclosures
+        image_url = None
+        if 'media_content' in entry and len(entry.media_content) > 0:
+            image_url = entry.media_content[0].get('url')
+        elif 'enclosures' in entry and len(entry.enclosures) > 0:
+            image_url = entry.enclosures[0].get('url')
+
         summary = summarize_with_gemini(description)
         if summary is None:
             print("فشل التلخيص، تخطى المنشور.")
@@ -119,8 +167,10 @@ async def main():
 
         print(f"منشور جديد: {post_id}")
         print("الملخص:\n", summary)
+        if image_url:
+            print(f"صورة مرفقة: {image_url}")
 
-        post_to_mastodon(summary)
+        post_to_mastodon(summary, image_url=image_url)
 
         write_last_sent_id(post_id)
 
