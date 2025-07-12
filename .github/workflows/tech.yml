@@ -3,7 +3,7 @@ name: Run tech.py every hour and manually
 on:
   schedule:
     - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
-  workflow_dispatch:     # تفعيل التشغيل اليدوي
+  workflow_dispatch:
 
 jobs:
   run-tech:
@@ -24,12 +24,14 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tech.py script
+        working-directory: bots
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
         run: python tech.py
 
       - name: Commit and push last_sent_id.txt
+        working-directory: bots
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
