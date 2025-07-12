@@ -7,8 +7,6 @@ import xml.etree.ElementTree as ET
 # إعدادات
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MASTODON_INSTANCE = "mastodon.social"  # غيّر إلى مثيل Mastodon الخاص بك
-MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
 LAST_ID_FILE = "last_sent_id.txt"
 RSS_OUTPUT_PATH = "rss.xml"  # حفظ الملف في جذر المستودع
 
@@ -96,49 +94,6 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
     print(f"تم حفظ ملف RSS في {output_path}")
 
-def post_to_mastodon(status_text, image_url=None):
-    if not MASTODON_ACCESS_TOKEN:
-        print("خطأ: توكن Mastodon غير موجود في متغيرات البيئة.")
-        return False
-
-    url = f"https://{MASTODON_INSTANCE}/api/v1/statuses"
-    headers = {
-        "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
-    }
-
-    media_ids = []
-    if image_url:
-        try:
-            img_resp = requests.get(image_url)
-            if img_resp.status_code == 200:
-                files = {'file': ('image.jpg', img_resp.content)}
-                media_resp = requests.post(f"https://{MASTODON_INSTANCE}/api/v1/media", headers=headers, files=files)
-                if media_resp.status_code in (200, 202):
-                    media_id = media_resp.json().get("id")
-                    if media_id:
-                        media_ids.append(media_id)
-                else:
-                    print(f"فشل رفع الصورة إلى Mastodon: {media_resp.status_code} - {media_resp.text}")
-            else:
-                print(f"فشل تحميل الصورة من الرابط: {image_url}")
-        except Exception as e:
-            print(f"خطأ أثناء رفع الصورة: {e}")
-
-    data = {
-        "status": status_text,
-        "visibility": "public",
-    }
-    if media_ids:
-        data["media_ids[]"] = media_ids
-
-    response = requests.post(url, headers=headers, data=data)
-    if response.status_code in (200, 202):
-        print("تم النشر على Mastodon بنجاح!")
-        return True
-    else:
-        print(f"فشل النشر على Mastodon: {response.status_code} - {response.text}")
-        return False
-
 def main():
     feed = feedparser.parse(RSS_URL)
     entries = feed.entries
@@ -192,12 +147,6 @@ def main():
         description_summary = summarize_description(description)
         if description_summary is None:
             print("فشل تلخيص الوصف، تخطي المنشور.")
-            continue
-
-        # أضف هنا إرسال المنشور إلى Mastodon
-        success = post_to_mastodon(description_summary, photo_url)
-        if not success:
-            print("فشل النشر على Mastodon، تخطي المنشور.")
             continue
 
         items.append({
