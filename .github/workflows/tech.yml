@@ -1,9 +1,9 @@
-name: Run tech.py every hour and push rss.xml
+name: Run tech.py every hour and manually
 
 on:
   schedule:
     - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
-  workflow_dispatch:     # تفعيل التشغيل اليدوي أيضًا
+  workflow_dispatch:     # تفعيل التشغيل اليدوي
 
 jobs:
   run-tech:
@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Setup Python 3.11
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
@@ -26,11 +26,5 @@ jobs:
       - name: Run tech.py script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
         run: python tech.py
-
-      - name: Commit and push rss.xml if changed
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add rss.xml
-          git diff --cached --quiet || (git commit -m "تحديث ملف RSS من GitHub Actions" && git push)
