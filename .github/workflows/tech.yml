@@ -1,0 +1,31 @@
+name: Run tech.py script
+
+on:
+  push:
+    branches:
+      - main   # شغل عند كل دفع على الفرع main
+  schedule:
+    - cron: '0 8 * * *'  # شغل يوميًا الساعة 8 صباحًا بتوقيت UTC (يمكنك تعديل الوقت)
+
+jobs:
+  run-tech:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # اختر نسخة البايثون المناسبة
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tech.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}  # استخدم secret من إعدادات المستودع
+        run: python tech.py
