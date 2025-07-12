@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 LAST_ID_FILE = "last_sent_id.txt"
-RSS_OUTPUT_PATH = "rss.xml"  # مسار حفظ ملف RSS
+RSS_OUTPUT_PATH = "rss.xml"  # حفظ الملف في جذر المستودع
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
@@ -73,7 +73,7 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
     channel = ET.SubElement(rss, "channel")
 
     ET.SubElement(channel, "title").text = "قناة الأخبار"
-    ET.SubElement(channel, "link").text = "https://bidjadraft.github.io/bots/"
+    ET.SubElement(channel, "link").text = "https://bidjadraft.github.io/"
     ET.SubElement(channel, "description").text = "ملخص الأخبار من المصادر المختلفة"
 
     for item in items:
@@ -86,7 +86,11 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
             ET.SubElement(item_elem, "enclosure", url=item["image"], type="image/jpeg")
 
     tree = ET.ElementTree(rss)
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    dir_name = os.path.dirname(output_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
     print(f"تم حفظ ملف RSS في {output_path}")
 
