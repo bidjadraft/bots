@@ -4,21 +4,25 @@ import requests
 import os
 import time
 
+# تحديد مسار ملف last_sent_id.txt في المجلد الجذري (خارج مجلد السكربت)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+LAST_ID_FILE = os.path.join(root_dir, "last_sent_id.txt")
+
 # إعدادات الخلاصة و Gemini API و Mastodon
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
 MASTODON_API_BASE_URL = "https://mastodon.social"  # ثابت لأنك تستخدم mastodon.social
-LAST_ID_FILE = "last_sent_id.txt"
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
-        print(f"ملف {LAST_ID_FILE} غير موجود، سيتم إنشاء ملف جديد عند أول حفظ.")
+        print(f"ملف {LAST_ID_FILE} غير موجود، سيتم إنشاؤه عند أول حفظ.")
         return None
     try:
         with open(LAST_ID_FILE, "r") as f:
             last_id = f.read().strip()
-            print(f"تم قراءة آخر معرف منشور محفوظ: {last_id}")
+            print(f"تم قراءة آخر معرف منشور: {last_id}")
             return last_id
     except Exception as e:
         print(f"خطأ أثناء قراءة الملف {LAST_ID_FILE}: {e}")
