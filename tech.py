@@ -13,13 +13,24 @@ LAST_ID_FILE = "last_sent_id.txt"
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
+        print(f"ملف {LAST_ID_FILE} غير موجود، سيتم إنشاء ملف جديد عند أول حفظ.")
         return None
-    with open(LAST_ID_FILE, "r") as f:
-        return f.read().strip()
+    try:
+        with open(LAST_ID_FILE, "r") as f:
+            last_id = f.read().strip()
+            print(f"تم قراءة آخر معرف منشور محفوظ: {last_id}")
+            return last_id
+    except Exception as e:
+        print(f"خطأ أثناء قراءة الملف {LAST_ID_FILE}: {e}")
+        return None
 
 def write_last_sent_id(post_id):
-    with open(LAST_ID_FILE, "w") as f:
-        f.write(post_id)
+    try:
+        with open(LAST_ID_FILE, "w") as f:
+            f.write(post_id)
+        print(f"تم حفظ آخر معرف منشور: {post_id} في الملف {LAST_ID_FILE}")
+    except Exception as e:
+        print(f"خطأ أثناء حفظ الملف {LAST_ID_FILE}: {e}")
 
 def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
