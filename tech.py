@@ -127,8 +127,10 @@ def post_to_mastodon(text, image_url=None):
     response = requests.post(post_url, headers=headers, data=data)
     if response.status_code == 200:
         print("تم النشر بنجاح على Mastodon.")
+        return True
     else:
         print(f"فشل النشر: {response.status_code} - {response.text}")
+        return False
 
 async def main():
     feed = feedparser.parse(RSS_URL)
@@ -185,9 +187,11 @@ async def main():
         if image_url:
             print(f"صورة مرفقة: {image_url}")
 
-        post_to_mastodon(summary, image_url=image_url)
-
-        write_last_sent_id(post_id)
+        success = post_to_mastodon(summary, image_url=image_url)
+        if success:
+            write_last_sent_id(post_id)
+        else:
+            print("لم يتم تحديث ملف آخر معرف بسبب فشل النشر.")
 
 if __name__ == "__main__":
     asyncio.run(main())
