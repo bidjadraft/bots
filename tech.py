@@ -22,11 +22,10 @@ def write_last_sent_id(post_id):
     with open(LAST_ID_FILE, "w") as f:
         f.write(post_id)
 
-def call_gemini_api(prompt, max_retries=5, wait_seconds=5, max_output_tokens=250):
+def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "maxOutputTokens": max_output_tokens
+        "contents": [{"parts": [{"text": prompt}]}]
     }
     headers = {'Content-Type': 'application/json'}
 
@@ -62,7 +61,12 @@ def summarize_description(text):
         "لخص النص في فقرة واحدة باللغة العربية، ويجب ألا يتجاوز النص 240 حرفًا بما في ذلك المسافات وعلامات الترقيم:\n"
         f"{text}"
     )
-    return call_gemini_api(prompt, max_output_tokens=250)
+    return call_gemini_api(prompt)
+
+def truncate_text(text, max_length=240):
+    if len(text) > max_length:
+        return text[:max_length].rstrip()
+    return text
 
 def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
     rss = ET.Element("rss", version="2.0")
@@ -186,6 +190,8 @@ def main():
         if description_summary is None:
             print("فشل تلخيص الوصف، تخطي المنشور.")
             continue
+
+        description_summary = truncate_text(description_summary, 240)
 
         success = post_to_mastodon(description_summary, photo_url)
         if not success:
