@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ET
 # إعدادات
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MASTODON_INSTANCE = "mastodon.social"  # غيّر إلى مثيل Mastodon الخاص بك
+MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
 LAST_ID_FILE = "last_sent_id.txt"
 RSS_OUTPUT_PATH = "rss.xml"  # حفظ الملف في جذر المستودع
 
@@ -73,7 +75,7 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
     channel = ET.SubElement(rss, "channel")
 
     ET.SubElement(channel, "title").text = "قناة الأخبار"
-    ET.SubElement(channel, "link").text = "https://bidjadraft.github.io/"
+    ET.SubElement(channel, "link").text = f"https://{MASTODON_INSTANCE}/"
     ET.SubElement(channel, "description").text = "ملخص الأخبار من المصادر المختلفة"
 
     for item in items:
@@ -93,6 +95,46 @@ def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
 
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
     print(f"تم حفظ ملف RSS في {output_path}")
+
+def post_to_mastodon(status_text, image_url=None):
+    url = f"https://{MASTODON_INSTANCE}/api/v1/statuses"
+    headers = {
+        "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
+    }
+
+    # إذا هناك صورة، نرفعها أولاً للحصول على media_id
+    media_ids = []
+    if image_url:
+        try:
+            img_resp = requests.get(image_url)
+            if img_resp.status_code == 200:
+                files = {'file': ('image.jpg', img_resp.content)}
+                media_resp = requests.post(f"https://{MASTODON_INSTANCE}/api/v2/media", headers=headers, files=files)
+                if media_resp.status_code == 202 or media_resp.status_code == 200:
+                    media_id = media_resp.json().get("id")
+                    if media_id:
+                        media_ids.append(media_id)
+                else:
+                    print(f"فشل رفع الصورة إلى Mastodon: {media_resp.status_code} - {media_resp.text}")
+            else:
+                print(f"فشل تحميل الصورة من الرابط: {image_url}")
+        except Exception as e:
+            print(f"خطأ أثناء رفع الصورة: {e}")
+
+    data = {
+        "status": status_text,
+        "visibility": "public",
+    }
+    if media_ids:
+        data["media_ids[]"] = media_ids
+
+    response = requests.post(url, headers=headers, data=data)
+    if response.status_code in (200, 202):
+        print("تم النشر على Mastodon بنجاح!")
+        return True
+    else:
+        print(f"فشل النشر على Mastodon: {response.status_code} - {response.text}")
+        return False
 
 def main():
     feed = feedparser.parse(RSS_URL)
@@ -137,7 +179,7 @@ def main():
         elif 'enclosures' in entry and len(entry.enclosures) > 0:
             photo_url = entry.enclosures[0]['url']
         if not photo_url:
-            photo_url = "https://via.placeholder.com/600x400.png?text=No+Image"
+            photo_url = None  # لا نرسل صورة افتراضية إلى Mastodon
 
         title = summarize_title(description)
         if title is None:
@@ -149,12 +191,15 @@ def main():
             print("فشل تلخيص الوصف، تخطي المنشور.")
             continue
 
+        # إرسال الوصف مع الصورة إلى Mastodon
+        post_to_mastodon(description_summary, photo_url)
+
         items.append({
             "title": title,
             "description": description_summary,
             "link": entry.get('link', ''),
             "guid": post_id,
-            "image": photo_url
+            "image": photo_url if photo_url else ""
         })
 
         write_last_sent_id(post_id)
