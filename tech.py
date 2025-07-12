@@ -23,14 +23,26 @@ def write_last_sent_id(post_id):
         f.write(post_id)
 
 def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}]
+    url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY,
     }
-    headers = {'Content-Type': 'application/json'}
+    payload = {
+        "contents": [
+            {
+                "role": "model",
+                "parts": [{"text": "You are a helpful assistant."}]
+            },
+            {
+                "role": "user",
+                "parts": [{"text": prompt}]
+            }
+        ]
+    }
 
     for attempt in range(max_retries):
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, headers=headers, json=payload)
         if response.status_code == 200:
             try:
                 data = response.json()
