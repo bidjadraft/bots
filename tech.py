@@ -23,7 +23,7 @@ def write_last_sent_id(post_id):
         f.write(post_id)
 
 def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     payload = {
         "contents": [
             {
@@ -33,7 +33,10 @@ def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
             }
         ]
     }
-    headers = {'Content-Type': 'application/json'}
+    headers = {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': GEMINI_API_KEY
+    }
 
     for attempt in range(max_retries):
         response = requests.post(url, json=payload, headers=headers)
@@ -48,7 +51,7 @@ def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
                 print(f"محاولة {attempt+1} فشلت بسبب ازدحام الخدمة. إعادة المحاولة بعد {wait_seconds} ثانية...")
                 time.sleep(wait_seconds)
             else:
-                print(f"حدث خطأ آخر في الاتصال بـ Gemini: {response.text}")
+                print(f"حدث خطأ آخر في الاتصال بـ Gemini: {response.status_code} - {response.text}")
                 return None
     print("فشلت كل المحاولات مع Gemini.")
     return None
