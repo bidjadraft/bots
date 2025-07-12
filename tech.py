@@ -1,16 +1,15 @@
+import asyncio
 import feedparser
 import requests
 import os
 import time
-import xml.etree.ElementTree as ET
 
-# إعدادات
+# إعدادات الخلاصة و Gemini API و Mastodon
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MASTODON_INSTANCE = "mastodon.social"  # غيّر إلى مثيل Mastodon الخاص بك
 MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
+MASTODON_API_BASE_URL = "https://mastodon.social"  # ثابت لأنك تستخدم mastodon.social
 LAST_ID_FILE = "last_sent_id.txt"
-RSS_OUTPUT_PATH = "rss.xml"
 
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
@@ -22,12 +21,9 @@ def write_last_sent_id(post_id):
     with open(LAST_ID_FILE, "w") as f:
         f.write(post_id)
 
-def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-    headers = {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': GEMINI_API_KEY
-    }
+def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    prompt = f"لخص النص باللغة العربية، لا يتعدى 240 حرفًا بما في ذلك المسافات وعلامات الترقيم:\n{text}"
     payload = {
         "contents": [
             {
@@ -37,6 +33,7 @@ def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
             }
         ]
     }
+    headers = {'Content-Type': 'application/json'}
 
     for attempt in range(max_retries):
         response = requests.post(url, json=payload, headers=headers)
@@ -45,104 +42,34 @@ def call_gemini_api(prompt, max_retries=10, wait_seconds=10):
             try:
                 return data['candidates'][0]['content']['parts'][0]['text']
             except Exception:
+                print("فشل استخراج الملخص من الاستجابة.")
                 return None
         else:
             if response.status_code == 503 or "overloaded" in response.text:
                 print(f"محاولة {attempt+1} فشلت بسبب ازدحام الخدمة. إعادة المحاولة بعد {wait_seconds} ثانية...")
                 time.sleep(wait_seconds)
             else:
-                print(f"خطأ في الاتصال بـ Gemini: {response.status_code} - {response.text}")
+                print(f"حدث خطأ آخر في الاتصال بـ Gemini: {response.status_code} - {response.text}")
                 return None
+
     print("فشلت كل المحاولات مع Gemini.")
     return None
 
-def summarize_title(text):
-    prompt = (
-        "لخص النص كعنوان قصير باللغة العربية، يجب أن يبدأ العنوان بكلمة عربية، "
-        "مع إبقاء أسماء الخدمات والبرامج والتطبيقات بالإنجليزية كما هي، "
-        "وبقية العنوان يكون بالعربية:\n"
-        f"{text}"
-    )
-    return call_gemini_api(prompt)
-
-def summarize_description(text):
-    prompt = (
-        "لخص النص باللغة العربية في 240 حرفا ، بما في ذلك المسافات و علامات الترقيم "
-        "وتأكد أن النص عربي واضح وسلس:\n"
-        f"{text}"
-    )
-    return call_gemini_api(prompt)
-
-def create_rss_xml(items, output_path=RSS_OUTPUT_PATH):
-    rss = ET.Element("rss", version="2.0")
-    channel = ET.SubElement(rss, "channel")
-
-    ET.SubElement(channel, "title").text = "قناة الأخبار"
-    ET.SubElement(channel, "link").text = "https://bidjadraft.github.io/"
-    ET.SubElement(channel, "description").text = "ملخص الأخبار من المصادر المختلفة"
-
-    for item in items:
-        item_elem = ET.SubElement(channel, "item")
-        ET.SubElement(item_elem, "title").text = item["title"]
-        ET.SubElement(item_elem, "description").text = item["description"]
-        ET.SubElement(item_elem, "link").text = item.get("link", "")
-        ET.SubElement(item_elem, "guid").text = item.get("guid", item.get("link", ""))
-        if "image" in item:
-            ET.SubElement(item_elem, "enclosure", url=item["image"], type="image/jpeg")
-
-    tree = ET.ElementTree(rss)
-
-    dir_name = os.path.dirname(output_path)
-    if dir_name:
-        os.makedirs(dir_name, exist_ok=True)
-
-    tree.write(output_path, encoding="utf-8", xml_declaration=True)
-    print(f"تم حفظ ملف RSS في {output_path}")
-
-def post_to_mastodon(status_text, image_url=None):
-    if not MASTODON_ACCESS_TOKEN:
-        print("خطأ: توكن Mastodon غير موجود في متغيرات البيئة.")
-        return False
-
-    url = f"https://{MASTODON_INSTANCE}/api/v1/statuses"
+def post_to_mastodon(text):
+    url = f"{MASTODON_API_BASE_URL}/api/v1/statuses"
     headers = {
         "Authorization": f"Bearer {MASTODON_ACCESS_TOKEN}"
     }
-
-    media_ids = []
-    if image_url:
-        try:
-            img_resp = requests.get(image_url)
-            if img_resp.status_code == 200:
-                files = {'file': ('image.jpg', img_resp.content)}
-                media_resp = requests.post(f"https://{MASTODON_INSTANCE}/api/v1/media", headers=headers, files=files)
-                if media_resp.status_code in (200, 202):
-                    media_id = media_resp.json().get("id")
-                    if media_id:
-                        media_ids.append(media_id)
-                else:
-                    print(f"فشل رفع الصورة إلى Mastodon: {media_resp.status_code} - {media_resp.text}")
-            else:
-                print(f"فشل تحميل الصورة من الرابط: {image_url}")
-        except Exception as e:
-            print(f"خطأ أثناء رفع الصورة: {e}")
-
     data = {
-        "status": status_text,
-        "visibility": "public",
+        "status": text
     }
-    if media_ids:
-        data["media_ids[]"] = media_ids
-
     response = requests.post(url, headers=headers, data=data)
-    if response.status_code in (200, 202):
-        print("تم النشر على Mastodon بنجاح!")
-        return True
+    if response.status_code == 200:
+        print("تم النشر بنجاح على Mastodon.")
     else:
-        print(f"فشل النشر على Mastodon: {response.status_code} - {response.text}")
-        return False
+        print(f"فشل النشر: {response.status_code} - {response.text}")
 
-def main():
+async def main():
     feed = feedparser.parse(RSS_URL)
     entries = feed.entries
     if not entries:
@@ -151,8 +78,10 @@ def main():
 
     last_sent_id = read_last_sent_id()
 
+    # ترتيب المنشورات من الأقدم للأحدث
     entries = sorted(entries, key=lambda e: e.get('published_parsed', 0))
 
+    # تحديد المنشورات الجديدة
     if not last_sent_id:
         entries_to_send = [entries[-1]]
     else:
@@ -166,53 +95,29 @@ def main():
                 entries_to_send.append(entry)
             elif post_id == last_sent_id:
                 found_last = True
+
         if not found_last:
             entries_to_send = entries
 
     if not entries_to_send:
-        print("لا توجد منشورات جديدة للإرسال.")
+        print("لا توجد منشورات جديدة للنشر.")
         return
-
-    items = []
 
     for entry in entries_to_send:
         post_id = entry.get('id') or entry.get('link')
         description = entry.get('summary', '')
 
-        photo_url = None
-        if 'media_content' in entry and len(entry.media_content) > 0:
-            photo_url = entry.media_content[0]['url']
-        elif 'enclosures' in entry and len(entry.enclosures) > 0:
-            photo_url = entry.enclosures[0]['url']
-        if not photo_url:
-            photo_url = "https://via.placeholder.com/600x400.png?text=No+Image"
-
-        title = summarize_title(description)
-        if title is None:
-            print("فشل تلخيص العنوان، تخطي المنشور.")
+        summary = summarize_with_gemini(description)
+        if summary is None:
+            print("فشل التلخيص، تخطى المنشور.")
             continue
 
-        description_summary = summarize_description(description)
-        if description_summary is None:
-            print("فشل تلخيص الوصف، تخطي المنشور.")
-            continue
+        print(f"منشور جديد: {post_id}")
+        print("الملخص:\n", summary)
 
-        success = post_to_mastodon(description_summary, photo_url)
-        if not success:
-            print("فشل النشر على Mastodon، تخطي المنشور.")
-            continue
-
-        items.append({
-            "title": title,
-            "description": description_summary,
-            "link": entry.get('link', ''),
-            "guid": post_id,
-            "image": photo_url
-        })
+        post_to_mastodon(summary)
 
         write_last_sent_id(post_id)
 
-    create_rss_xml(items)
-
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
