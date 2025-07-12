@@ -1,8 +1,9 @@
-name: Run tech.py every hour
+name: Run tech.py every hour or manually
 
 on:
   schedule:
-    - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
+    - cron: '0 * * * *'  # تشغيل كل ساعة
+  workflow_dispatch:     # تفعيل التشغيل اليدوي
 
 jobs:
   run-tech:
