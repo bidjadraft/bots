@@ -4,10 +4,9 @@ import requests
 import os
 import time
 
-# تحديد مسار ملف last_sent_id.txt في المجلد الجذري (خارج مجلد السكربت)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.abspath(os.path.join(current_dir, ".."))
-LAST_ID_FILE = os.path.join(root_dir, "last_sent_id.txt")
+# مسار ملف last_sent_id.txt داخل مجلد bots
+current_dir = os.path.dirname(os.path.abspath(__file__))  # هذا هو مجلد bots
+LAST_ID_FILE = os.path.join(current_dir, "last_sent_id.txt")
 
 # إعدادات الخلاصة و Gemini API و Mastodon
 RSS_URL = "https://feed.alternativeto.net/news/all"
