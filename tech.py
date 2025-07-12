@@ -31,7 +31,12 @@ def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
                     {"text": prompt}
                 ]
             }
-        ]
+        ],
+        "generationConfig": {
+            "maxOutputTokens": 240,
+            "temperature": 0.7,
+            "topP": 0.8
+        }
     }
     headers = {'Content-Type': 'application/json'}
 
