@@ -23,19 +23,17 @@ def write_last_sent_id(post_id):
         f.write(post_id)
 
 def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
+    # استخدام رابط API الصحيح مع gemini-pro
     url = "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
     headers = {
         "Content-Type": "application/json",
+        # استخدام x-goog-api-key لتمرير المفتاح
         "x-goog-api-key": GEMINI_API_KEY,
     }
     payload = {
         "contents": [
             {
-                "role": "model",
-                "parts": [{"text": "You are a helpful assistant."}]
-            },
-            {
-                "role": "user",
+                "role": "user",  # البدء بدور "user" للطلب
                 "parts": [{"text": prompt}]
             }
         ]
@@ -46,9 +44,17 @@ def call_gemini_api(prompt, max_retries=5, wait_seconds=5):
         if response.status_code == 200:
             try:
                 data = response.json()
-                return data['candidates'][0]['content']['parts'][0]['text']
+                # التأكد من أن هناك 'candidates' و 'content' و 'parts'
+                if 'candidates' in data and len(data['candidates']) > 0 and \
+                   'content' in data['candidates'][0] and 'parts' in data['candidates'][0]['content'] and \
+                   len(data['candidates'][0]['content']['parts']) > 0 and \
+                   'text' in data['candidates'][0]['content']['parts'][0]:
+                    return data['candidates'][0]['content']['parts'][0]['text']
+                else:
+                    print(f"استجابة Gemini لا تحتوي على نص متوقع: {data}")
+                    return None
             except Exception as e:
-                print(f"خطأ في تحليل استجابة Gemini: {e}")
+                print(f"خطأ في تحليل استجابة Gemini: {e} - Response: {response.text}")
                 return None
         else:
             if response.status_code == 503 or "overloaded" in response.text:
@@ -73,6 +79,7 @@ def summarize_description(text):
         "لخص النص في فقرة واحدة باللغة العربية، ويجب ألا يتجاوز النص 240 حرفًا بما في ذلك المسافات وعلامات الترقيم:\n"
         f"{text}"
     )
+    # لا نمرر max_output_tokens هنا
     return call_gemini_api(prompt)
 
 def truncate_text(text, max_length=240):
@@ -133,6 +140,7 @@ def post_to_mastodon(status_text, image_url=None):
         "visibility": "public",
     }
     if media_ids:
+        # تأكد من أن media_ids[] تأخذ قائمة من المعرفات
         data["media_ids[]"] = media_ids
 
     response = requests.post(url, headers=headers, data=data)
@@ -159,9 +167,11 @@ def main():
 
     last_sent_id = read_last_sent_id()
 
+    # فرز الإدخالات لضمان معالجتها بالترتيب الزمني (الأقدم أولاً)
     entries = sorted(entries, key=lambda e: e.get('published_parsed', 0))
 
     if not last_sent_id:
+        # إذا لم يكن هناك آخر معرف محفوظ، نرسل أحدث منشور فقط
         entries_to_send = [entries[-1]]
     else:
         entries_to_send = []
@@ -170,11 +180,12 @@ def main():
             post_id = entry.get('id') or entry.get('link')
             if not post_id:
                 continue
-            if found_last:
+            if found_last: # بعد العثور على آخر منشور، نضيف جميع المنشورات اللاحقة
                 entries_to_send.append(entry)
             elif post_id == last_sent_id:
                 found_last = True
-        if not found_last:
+        if not found_last and last_sent_id: # إذا لم يتم العثور على آخر منشور (ربما مسح من الخلاصة)، أرسل الكل
+            print(f"لم يتم العثور على آخر منشور مرسل ({last_sent_id}) في الخلاصة، سيتم معالجة جميع المنشورات الجديدة.")
             entries_to_send = entries
 
     if not entries_to_send:
@@ -188,26 +199,33 @@ def main():
         description = entry.get('summary', '')
 
         photo_url = None
+        # البحث عن الصور في media_content أو enclosures
         if 'media_content' in entry and len(entry.media_content) > 0:
             photo_url = entry.media_content[0]['url']
         elif 'enclosures' in entry and len(entry.enclosures) > 0:
-            photo_url = entry.enclosures[0]['url']
+            # فلترة المرفقات للتأكد من أنها صور
+            for enc in entry.enclosures:
+                if 'type' in enc and enc['type'].startswith('image/'):
+                    photo_url = enc['url']
+                    break
 
         title = summarize_title(description)
         if title is None:
-            print("فشل تلخيص العنوان، تخطي المنشور.")
+            print(f"فشل تلخيص العنوان للمنشور {post_id}، تخطي المنشور.")
             continue
 
         description_summary = summarize_description(description)
         if description_summary is None:
-            print("فشل تلخيص الوصف، تخطي المنشور.")
+            print(f"فشل تلخيص الوصف للمنشور {post_id}، تخطي المنشور.")
             continue
 
+        # قص النص الناتج لضمان عدم تجاوز 240 حرفاً قبل إرساله إلى Mastodon
         description_summary = truncate_text(description_summary, 240)
 
         success = post_to_mastodon(description_summary, photo_url)
         if not success:
-            print("فشل النشر على Mastodon، تخطي المنشور.")
+            print(f"فشل النشر على Mastodon للمنشور {post_id}، تخطي المنشور.")
+            # لا نكتب last_sent_id إذا فشل النشر
             continue
 
         items.append({
@@ -218,6 +236,7 @@ def main():
             "image": photo_url or ""
         })
 
+        # حفظ آخر معرف تم إرساله بنجاح
         write_last_sent_id(post_id)
 
     create_rss_xml(items)
