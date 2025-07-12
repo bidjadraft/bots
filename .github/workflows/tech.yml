@@ -1,9 +1,9 @@
-name: Run tech.py every hour or manually
+name: Run tech.py every hour and push rss.xml
 
 on:
   schedule:
-    - cron: '0 * * * *'  # تشغيل كل ساعة
-  workflow_dispatch:     # تفعيل التشغيل اليدوي
+    - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
+  workflow_dispatch:     # تفعيل التشغيل اليدوي أيضًا
 
 jobs:
   run-tech:
@@ -23,7 +23,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tech.py
+      - name: Run tech.py script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python tech.py
+
+      - name: Commit and push rss.xml if changed
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add rss.xml
+          git diff --cached --quiet || (git commit -m "تحديث ملف RSS من GitHub Actions" && git push)
