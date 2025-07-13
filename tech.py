@@ -4,23 +4,25 @@ import requests
 import os
 import time
 
-# حفظ ملف last_sent_id.txt في نفس مجلد tech.py
-LAST_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_sent_id.txt")
-
-RSS_URL = "https://feed.alternativeto.net/news/all"
+# إعدادات Mastodon
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MASTODON_ACCESS_TOKEN = os.getenv("MASTODON_ACCESS_TOKEN")
 MASTODON_API_BASE_URL = "https://mastodon.social"
 
+# إعدادات تلغرام
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+
+# إعدادات عامة
+RSS_URL = "https://feed.alternativeto.net/news/all"
+LAST_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_sent_id.txt")
+
 def read_last_sent_id():
     if not os.path.exists(LAST_ID_FILE):
-        print(f"ملف {LAST_ID_FILE} غير موجود، سيتم إنشاؤه عند أول حفظ.")
         return None
     try:
         with open(LAST_ID_FILE, "r") as f:
-            last_id = f.read().strip()
-            print(f"تم قراءة آخر معرف منشور: {last_id}")
-            return last_id
+            return f.read().strip()
     except Exception as e:
         print(f"خطأ أثناء قراءة الملف {LAST_ID_FILE}: {e}")
         return None
@@ -29,13 +31,12 @@ def write_last_sent_id(post_id):
     try:
         with open(LAST_ID_FILE, "w") as f:
             f.write(post_id)
-        print(f"تم حفظ آخر معرف منشور: {post_id} في الملف {LAST_ID_FILE}")
     except Exception as e:
         print(f"خطأ أثناء حفظ الملف {LAST_ID_FILE}: {e}")
 
 def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    prompt = f"لخص النص باللغة العربية، احرص أن لا يتعدى 245 حرفًا بما في ذلك المسافات وعلامات الترقيم:\n{text}"
+    prompt = f"لخص النص باللغة العربية، احرص أن لا يتعدى 245 حرفًا:\n{text}"
     payload = {
         "contents": [
             {
@@ -57,7 +58,6 @@ def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
             try:
                 return data['candidates'][0]['content']['parts'][0]['text']
             except Exception:
-                print("فشل استخراج الملخص من الاستجابة.")
                 return None
         else:
             if response.status_code == 503 or "overloaded" in response.text:
@@ -84,12 +84,7 @@ def upload_media_to_mastodon(image_url):
     response = requests.post(upload_url, headers=headers, files=files)
     if response.status_code in (200, 202):
         media_id = response.json().get('id')
-        if media_id:
-            print("تم رفع الصورة بنجاح.")
-            return media_id
-        else:
-            print("لم يتم الحصول على media_id بعد رفع الصورة.")
-            return None
+        return media_id
     else:
         print(f"فشل رفع الصورة: {response.status_code} - {response.text}")
         return None
@@ -103,19 +98,40 @@ def post_to_mastodon(text, image_url=None):
         media_id = upload_media_to_mastodon(image_url)
         if media_id:
             media_ids.append(media_id)
-        else:
-            print("سيتم إرسال المنشور بدون صورة بسبب فشل رفع الصورة.")
 
     if media_ids:
         data["media_ids[]"] = media_ids
 
     post_url = f"{MASTODON_API_BASE_URL}/api/v1/statuses"
     response = requests.post(post_url, headers=headers, data=data)
+    return response.status_code == 200
+
+def send_telegram_photo(text, image_url):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHANNEL_ID:
+        print("بيانات تلغرام غير مكتملة.")
+        return False
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+    data = {
+        "chat_id": TELEGRAM_CHANNEL_ID,
+        "caption": text,
+        "parse_mode": "HTML"
+    }
+    files = {}
+    if image_url:
+        try:
+            img_data = requests.get(image_url).content
+            files['photo'] = ('image.jpg', img_data)
+        except Exception:
+            data['photo'] = image_url  # إذا فشل التحميل، أرسل الرابط فقط
+    else:
+        data['photo'] = "https://via.placeholder.com/600x400.png?text=No+Image"
+
+    response = requests.post(url, data=data, files=files if files else None)
     if response.status_code == 200:
-        print("تم النشر بنجاح على Mastodon.")
+        print("تم الإرسال إلى تلغرام.")
         return True
     else:
-        print(f"فشل النشر: {response.status_code} - {response.text}")
+        print(f"فشل الإرسال إلى تلغرام: {response.text}")
         return False
 
 async def main():
@@ -168,11 +184,13 @@ async def main():
         if image_url:
             print(f"صورة مرفقة: {image_url}")
 
-        success = post_to_mastodon(summary, image_url=image_url)
-        if success:
-            write_last_sent_id(post_id)
-        else:
-            print("لم يتم تحديث ملف آخر معرف بسبب فشل النشر.")
+        # النشر على Mastodon
+        post_to_mastodon(summary, image_url=image_url)
+        # النشر على قناة تلغرام
+        send_telegram_photo(summary, image_url)
+
+        # تحديث آخر معرف منشور
+        write_last_sent_id(post_id)
 
 if __name__ == "__main__":
     asyncio.run(main())
