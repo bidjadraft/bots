@@ -30,13 +30,13 @@ jobs:
           MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
         run: python tech.py
 
-      - name: Commit and push last_sent_id.txt
+      - name: Commit and push last_sent_id.txt if changed
         working-directory: bots
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add last_sent_id.txt
-          git commit -m "تحديث آخر معرف منشور"
+          git diff --cached --quiet || git commit -m "Update last_sent_id.txt"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
