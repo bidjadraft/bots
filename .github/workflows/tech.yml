@@ -2,36 +2,34 @@ name: Run tech.py every hour and manually
 
 on:
   schedule:
-    - cron: '0 * * * *'  # تشغيل كل ساعة عند الدقيقة 0
-  workflow_dispatch:
+    - cron: '0 * * * *'   # تشغيل كل ساعة عند الدقيقة 0
+  workflow_dispatch:       # يسمح بالتشغيل اليدوي
+
+permissions:
+  contents: write          # للسماح بعمل push
 
 jobs:
   run-tech:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10'
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run tech.py script
-        working-directory: bots
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
         run: python tech.py
 
       - name: Commit and push last_sent_id.txt if changed
-        working-directory: bots
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
