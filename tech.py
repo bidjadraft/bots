@@ -4,37 +4,8 @@ import requests
 import os
 import time
 
-# تحديد المسار إلى جذر المستودع.
-# هذا يجعل مسار last_sent_id.txt ثابتًا بغض النظر عن مكان ملف Python.
-# إذا كان ملف tech.py موجودًا في مجلد فرعي (مثل 'scripts/tech.py' داخل 'bots/'),
-# فإنه سيقوم بالبحث عن 'bots/last_sent_id.txt'.
-# إذا كان tech.py موجودًا مباشرة في 'bots/', فسيظل يعمل بشكل صحيح.
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-# هذا الجزء يحتاج إلى تعديل بناءً على عمق مجلد 'tech.py' داخل 'bots'
-# لتوضيح: إذا كان tech.py في /bots/tech.py، فـ PROJECT_ROOT هو /bots/
-# إذا كان tech.py في /bots/scripts/tech.py، فـ PROJECT_ROOT هو /bots/scripts/
-# لذلك، لضمان أن last_sent_id.txt يكون في /bots/ دائماً:
-# يجب أن نجد جذر مجلد 'bots'.
-# الطريقة الأكثر أمانًا هي تحديد جذر المستودع بشكل صريح إذا كان السكربت في مجلد فرعي.
-
-# لنفترض أن السكربت (tech.py) موجود في 'bots/tech.py' أو 'bots/src/tech.py'
-# وسنقوم بالبحث عن دليل 'bots' كعلامة على جذر المستودع.
-# هذا حل أكثر قوة من الاعتماد على عدد os.path.dirname().
-current_dir = os.path.abspath(os.path.dirname(__file__))
-# ابحث عن مجلد 'bots' في المسار
-while current_dir != os.path.sep and os.path.basename(current_dir) != 'bots':
-    current_dir = os.path.dirname(current_dir)
-
-# إذا تم العثور على 'bots' أو وصلنا إلى جذر النظام
-if os.path.basename(current_dir) == 'bots':
-    REPO_ROOT = current_dir
-else:
-    # إذا لم يتم العثور على مجلد 'bots' في المسار العلوي، نعود إلى مجلد السكريبت
-    print("تحذير: لم يتم العثور على مجلد 'bots' في المسار. سيتم حفظ الملف بجانب السكربت.")
-    REPO_ROOT = os.path.abspath(os.path.dirname(__file__))
-
-LAST_ID_FILE = os.path.join(REPO_ROOT, "last_sent_id.txt")
-
+# حفظ ملف last_sent_id.txt في نفس مجلد tech.py
+LAST_ID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "last_sent_id.txt")
 
 RSS_URL = "https://feed.alternativeto.net/news/all"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
