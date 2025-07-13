@@ -2,11 +2,11 @@ name: Run tech.py every hour and manually
 
 on:
   schedule:
-    - cron: '0 * * * *'   # تشغيل كل ساعة عند الدقيقة 0
-  workflow_dispatch:       # يسمح بالتشغيل اليدوي
+    - cron: '0 * * * *'   # يشغل السكربت كل ساعة
+  workflow_dispatch:        # يسمح بالتشغيل اليدوي
 
 permissions:
-  contents: write          # للسماح بعمل push
+  contents: write           # ضروري حتى يسمح بالـ push
 
 jobs:
   run-tech:
