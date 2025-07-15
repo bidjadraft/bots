@@ -1,15 +1,15 @@
-name: Run tech.py every hour and manually
+name: Run tech.py and nofab.py every hour and manually
 
 on:
   schedule:
-    - cron: '0 * * * *'   # يشغل السكربت كل ساعة
-  workflow_dispatch:        # يسمح بالتشغيل اليدوي
+    - cron: '0 * * * *'   # يشغل كل ساعة عند الدقيقة صفر
+  workflow_dispatch:      # يسمح بتشغيل يدوي للـ workflow
 
 permissions:
-  contents: write           # ضروري حتى يسمح بالـ push
+  contents: write         # للسماح بعمليات push (لتعديل ملفات)
 
 jobs:
-  run-tech:
+  run-scripts:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,12 +31,18 @@ jobs:
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
         run: python tech.py
 
-      - name: Commit and push last_sent_id.txt if changed
+      - name: Run nofab.py script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+        run: python nofab.py
+
+      - name: Commit and push last_sent_id.txt and last_nofab.txt if changed
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add last_sent_id.txt
-          git diff --cached --quiet || git commit -m "Update last_sent_id.txt"
+          git add last_sent_id.txt last_nofab.txt || true
+          git diff --cached --quiet || git commit -m "Update last sent ID files"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
