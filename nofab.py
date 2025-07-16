@@ -31,24 +31,26 @@ def clean_html_and_unescape(raw_html):
     lines = [line.strip() for line in text.split('\n') if line.strip()]
     return '\n\n'.join(lines)
 
-def send_telegram_media_group_with_caption(image_urls, caption):
+def send_telegram_media_group_with_caption(media_urls, caption):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMediaGroup"
     media = []
-    for i, img_url in enumerate(image_urls[:10]):
+    for i, media_url in enumerate(media_urls[:10]):
         media_item = {
             "type": "photo",
-            "media": img_url
+            "media": media_url
         }
         if i == 0:
             media_item["caption"] = caption
+            media_item["parse_mode"] = "HTML"
         media.append(media_item)
+
     data = {
         "chat_id": TELEGRAM_CHANNEL_ID,
         "media": json.dumps(media)
     }
     response = requests.post(url, data=data)
     if response.status_code == 200:
-        print("تم الإرسال إلى تلغرام (عدة صور مع تعليق).")
+        print(f"تم الإرسال إلى تلغرام (عدة صور).")
         return True
     else:
         print(f"فشل الإرسال إلى تلغرام (عدة صور): {response.text}")
@@ -59,6 +61,7 @@ def send_telegram_text(text):
     data = {
         "chat_id": TELEGRAM_CHANNEL_ID,
         "text": text,
+        "parse_mode": "HTML"
     }
     response = requests.post(url, data=data)
     if response.status_code == 200:
@@ -103,36 +106,87 @@ async def main():
         raw_desc = e.get('description') or e.get('summary') or ''
         text = clean_html_and_unescape(raw_desc)
 
-        image_urls = []
+        media_urls = []
+        videos = []
+
         media_contents = e.get('media_content', [])
         for media in media_contents:
-            url_img = media.get('url')
-            if url_img:
-                image_urls.append(url_img)
+            url_media = media.get('url')
+            if url_media:
+                if any(url_media.lower().endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm")):
+                    videos.append(url_media)
+                elif any(url_media.lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
+                    media_urls.append(url_media)
 
         enclosures = e.get('enclosures', [])
         for enc in enclosures:
-            url_img = enc.get('url')
-            if url_img:
-                image_urls.append(url_img)
+            url_media = enc.get('url')
+            if url_media:
+                if any(url_media.lower().endswith(ext) for ext in (".mp4", ".mov", ".avi", ".mkv", ".webm")):
+                    videos.append(url_media)
+                elif any(url_media.lower().endswith(ext) for ext in (".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp")):
+                    media_urls.append(url_media)
 
-        image_urls = list(dict.fromkeys(image_urls))
+        # إزالة التكرارات
+        media_urls = list(dict.fromkeys(media_urls))
+        videos = list(dict.fromkeys(videos))
 
         print(f"منشور جديد: {post_id}")
         print(f"النص: {text}")
-        print(f"عدد الصور: {len(image_urls)}")
+        print(f"عدد الصور: {len(media_urls)}")
+        print(f"عدد الفيديوهات: {len(videos)}")
 
-        if image_urls:
-            sent = send_telegram_media_group_with_caption(image_urls, text)
+        sent = False
+        if videos:
+            # أرسل أول فيديو فقط منفرد مع التعليق
+            video_url = videos[0]
+            url_api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendVideo"
+            data = {
+                "chat_id": TELEGRAM_CHANNEL_ID,
+                "video": video_url,
+                "caption": text,
+                "parse_mode": "HTML"
+            }
+            response = requests.post(url_api, data=data)
+            if response.status_code == 200:
+                print("تم الإرسال إلى تلغرام (فيديو واحد).")
+                sent = True
+            else:
+                print(f"فشل الإرسال إلى تلغرام (فيديو واحد): {response.text}")
+                sent = False
         else:
-            sent = send_telegram_text(text)
+            # لا يوجد فيديوهات، تعالج الصور حسب العدد
+            if len(media_urls) == 0:
+                sent = send_telegram_text(text)
+            elif len(media_urls) == 1:
+                # صورة واحدة مع تعليق
+                photo_url = media_urls[0]
+                url_api = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+                data = {
+                    "chat_id": TELEGRAM_CHANNEL_ID,
+                    "photo": photo_url,
+                    "caption": text,
+                    "parse_mode": "HTML"
+                }
+                response = requests.post(url_api, data=data)
+                if response.status_code == 200:
+                    print("تم الإرسال إلى تلغرام (صورة واحدة).")
+                    sent = True
+                else:
+                    print(f"فشل الإرسال إلى تلغرام (صورة واحدة): {response.text}")
+                    sent = False
+            elif 2 <= len(media_urls) <= 4:
+                # 2 - 4 صور كـ مجموعة صور
+                sent = send_telegram_media_group_with_caption(media_urls[:4], text)
+            else:
+                # أكثر من 4 صور - نرسل أول 4 فقط كمجموعة صور مع تعليق
+                sent = send_telegram_media_group_with_caption(media_urls[:4], text)
 
         if sent:
             write_last_sent_id(post_id)
-            await asyncio.sleep(1)  # التمهل ثانية واحدة بين الإرسال
+            await asyncio.sleep(1)
         else:
             print(f"فشل الإرسال: {post_id}")
 
 if __name__ == "__main__":
     asyncio.run(main())
-
