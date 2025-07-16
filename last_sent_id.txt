@@ -1,1 +1,1 @@
-https://alternativeto.net/news/2025/7/furmark-2-9-adds-support-for-new-gpus-and-the-ability-to-specify-the-screen-on-linux/
+https://alternativeto.net/news/2025/7/nuxt-4-0-debuts-with-cleaner-structure-smarter-data-fetching-and-better-typescript-support/
