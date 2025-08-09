@@ -1,1 +1,1 @@
-https://alternativeto.net/news/2025/8/openvibe-expands-its-decentralized-social-feed-with-support-for-rss-news-sources/
+https://alternativeto.net/news/2025/8/rust-1-89-expands-x86-support-stabilizes-apis-and-downgrades-macos-x86_64-support/
