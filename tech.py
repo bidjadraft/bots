@@ -36,7 +36,7 @@ def write_last_sent_id(post_id):
 
 def summarize_with_gemini(text, max_retries=10, wait_seconds=10):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    prompt = f"لخص النص باللغة العربية، احرص أن لا يتعدى 245 حرفًا:\n{text}"
+    prompt = f"لخص النص باللغة العربية، وابدأ بكلمة عربية تليها هاشتاغ باسم الخدمة أو المنصة أو التطبيق أو الشركة باللغة الإنجليزية. احرص على أن لا يتجاوز النص 245 حرفًا:\n{text}"
     payload = {
         "contents": [
             {
