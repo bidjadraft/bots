@@ -2,8 +2,8 @@ name: Run BidjaDraft RSS Bot
 
 on:
   schedule:
-    - cron: '0 * * * *'   # شغل كل ساعة عند الدقيقة صفر
-  workflow_dispatch:      # لإضافة زر تشغيل يدوي في GitHub
+    - cron: '0 * * * *'   # تشغيل كل ساعة عند الدقيقة صفر
+  workflow_dispatch:      # زر تشغيل يدوي
 
 jobs:
   run_script:
@@ -12,6 +12,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Restore last_draft.txt Cache
+        uses: actions/cache@v3
+        with:
+          path: last_draft.txt
+          key: last-draft-${{ runner.os }}
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
@@ -29,3 +35,9 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           RSS_URL: ${{ secrets.RSS_URL }}
+
+      - name: Save last_draft.txt Cache
+        uses: actions/cache@v3
+        with:
+          path: last_draft.txt
+          key: last-draft-${{ runner.os }}
