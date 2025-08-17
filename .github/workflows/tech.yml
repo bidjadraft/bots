@@ -1,0 +1,31 @@
+name: Run BidjaDraft RSS Bot
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # شغل كل ساعة عند الدقيقة صفر
+  workflow_dispatch:      # لإضافة زر تشغيل يدوي في GitHub
+
+jobs:
+  run_script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser requests beautifulsoup4
+
+      - name: Run bidjadraft.py script
+        run: python bidjadraft.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          RSS_URL: ${{ secrets.RSS_URL }}
