@@ -10,14 +10,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository with full history
         uses: actions/checkout@v3
-
-      - name: Restore last_draft.txt Cache
-        uses: actions/cache@v3
         with:
-          path: last_draft.txt
-          key: last-draft-${{ runner.os }}
+          fetch-depth: 0  # مطلوب لتمكين commit و push
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v4
@@ -36,8 +32,19 @@ jobs:
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           RSS_URL: ${{ secrets.RSS_URL }}
 
-      - name: Save last_draft.txt Cache
-        uses: actions/cache@v3
-        with:
-          path: last_draft.txt
-          key: last-draft-${{ runner.os }}
+      - name: Configure Git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit and push updated last_draft.txt
+        run: |
+          git add last_draft.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Update last_draft.txt - latest sent post id"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
